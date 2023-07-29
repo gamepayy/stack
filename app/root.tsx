@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cssBundleHref } from '@remix-run/css-bundle'
 import {
 	json,
@@ -49,6 +50,27 @@ import { makeTimings, time } from './utils/timing.server.ts'
 import { useToast } from './utils/useToast.tsx'
 import { useOptionalUser, useUser } from './utils/user.ts'
 import rdtStylesheetUrl from 'remix-development-tools/stylesheet.css'
+
+// rainbowkit
+import { configureChains, createConfig, WagmiConfig } from 'wagmi'
+import {
+	mainnet,
+	polygon,
+	optimism,
+	arbitrum,
+	zora,
+	goerli,
+} from 'wagmi/chains'
+import { publicProvider } from 'wagmi/providers/public'
+import type { Chain } from 'wagmi'
+import {
+	RainbowKitProvider,
+	ConnectButton,
+	getDefaultWallets,
+} from '@rainbow-me/rainbowkit'
+
+import rainbowStylesUrl from '@rainbow-me/rainbowkit/styles.css'
+
 const RemixDevTools =
 	process.env.NODE_ENV === 'development'
 		? lazy(() => import('remix-development-tools'))
@@ -61,6 +83,7 @@ export const links: LinksFunction = () => {
 		// Preload CSS as a resource to avoid render blocking
 		{ rel: 'preload', href: fontStylestylesheetUrl, as: 'style' },
 		{ rel: 'preload', href: tailwindStylesheetUrl, as: 'style' },
+		{ rel: 'stylesheet', href: rainbowStylesUrl },
 		cssBundleHref ? { rel: 'preload', href: cssBundleHref, as: 'style' } : null,
 		rdtStylesheetUrl && process.env.NODE_ENV === 'development'
 			? { rel: 'preload', href: rdtStylesheetUrl, as: 'style' }
@@ -196,6 +219,33 @@ function App() {
 	const isOnSearchPage = matches.find(m => m.id === 'routes/users+/index')
 	useToast(data.flash?.toast)
 
+	const [{ config, chains }] = useState(() => {
+		const testChains =
+			data.ENV.PUBLIC_ENABLE_TESTNETS === 'true' ? [goerli] : []
+
+		const { chains, publicClient } = configureChains(
+			[mainnet, polygon, optimism, arbitrum, zora, ...testChains],
+			[publicProvider()],
+		)
+
+		const { connectors } = getDefaultWallets({
+			appName: 'RainbowKit Remix Example',
+			projectId: 'YOUR_PROJECT_ID',
+			chains,
+		})
+
+		const config = createConfig({
+			autoConnect: true,
+			connectors,
+			publicClient,
+		})
+
+		return {
+			config,
+			chains,
+		}
+	})
+
 	return (
 		<Document nonce={nonce} theme={theme} env={data.ENV}>
 			<div className="flex h-screen flex-col justify-between">
@@ -214,9 +264,26 @@ function App() {
 							{user ? (
 								<UserDropdown />
 							) : (
-								<Button asChild variant="default" size="sm">
-									<Link to="/login">Log In</Link>
-								</Button>
+								<div className="flex items-center">
+									<Button asChild variant="default" size="sm">
+										<Link to="/login">Log In</Link>
+									</Button>
+									{config && chains ? (
+										<WagmiConfig config={config}>
+											<RainbowKitProvider chains={chains as Chain[]}>
+												<div
+													style={{
+														display: 'flex',
+														justifyContent: 'flex-end',
+														padding: '12px',
+													}}
+												>
+													<ConnectButton />
+												</div>
+											</RainbowKitProvider>
+										</WagmiConfig>
+									) : null}
+								</div>
 							)}
 						</div>
 					</nav>
